@@ -41,7 +41,7 @@ These decisions are the implementation plan, not a claim that the starter code i
 ### Smallest safe implementation order
 
 1. Add schema validation and run data contracts, preserving the already-passing seed regression.
-2. Implement team creation, then activity creation and reference validation; run the relevant API contracts after each change.
+2. Follow API contract order: implement activity creation and reference validation, then team creation; run the relevant API contracts after each change.
 3. Implement leaderboard aggregation, then personalized workout suggestions; verify exact response shapes and error cases.
 4. Replace presentation placeholders one route at a time: activities, teams, leaderboard, then workouts. Complete all four UI states for each route before proceeding.
 5. Run all contract tests and both builds, then smoke-test the seeded application through Vite's relative `/api` proxy without exposing the API port.
@@ -74,6 +74,14 @@ Ran `npm run test:data --prefix octofit-tracker/backend` after each capability c
 | Workout schema and seed validation | 5 passed | None. |
 
 The seed regression passed at every step. It runs the seed twice, checks stable collection counts, retains unrelated records, and verifies demo-user membership repair. `npm run build --prefix octofit-tracker/backend` also passed after all model changes. API and React files were not changed; their suites were not rerun during this data-only implementation.
+
+### First API contract results (2026-10-19)
+
+Implemented only activity creation in the existing service. Missing or invalid fields return `400`; well-formed IDs without a matching user or team return `404`. Validation completes before insertion. Created activities retain the supplied references, type, and minutes, compute one point per minute, and use a server-generated occurrence date. Existing routes and activity listing remain unchanged.
+
+- `npm run test:api --prefix octofit-tracker/backend -- -t "creates and lists valid activities while rejecting invalid input"`: passed (1 passed, 3 skipped). Coverage also checks invalid types/minutes, each missing reference independently, and that client-supplied points and dates cannot override computed values.
+- `npm run build --prefix octofit-tracker/backend`: passed.
+- Next: `npm run test:api --prefix octofit-tracker/backend -- -t "creates teams and exposes members"`: confirmed failing because team creation still returns `501` instead of `400` for a missing name. Team creation, leaderboard, workout suggestions, and React are unchanged.
 
 ### Implementation validation commands
 

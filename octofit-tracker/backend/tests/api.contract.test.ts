@@ -32,22 +32,45 @@ describe('OctoFit API contract', () => {
     const { user, team } = await createUserAndTeam('Mona', 'mona@example.com', 'Mona');
     const invalid = await request(app).post('/api/activities').send({});
     expect(invalid.status).toBe(400);
+    const validInput = { userId: user._id.toString(), teamId: team._id.toString(), type: 'run', minutes: 30 };
+    for (const invalidInput of [
+      { ...validInput, type: '' },
+      { ...validInput, type: '   ' },
+      { ...validInput, type: 123 },
+      { ...validInput, minutes: 0 },
+      { ...validInput, minutes: -10 },
+      { ...validInput, minutes: '30' },
+      { ...validInput, minutes: null },
+      { ...validInput, userId: 123 },
+      { ...validInput, teamId: null },
+    ]) {
+      const response = await request(app).post('/api/activities').send(invalidInput);
+      expect(response.status).toBe(400);
+      expect(response.body.error).toEqual(expect.any(String));
+    }
     const missingReferences = await request(app).post('/api/activities').send({ userId: new mongoose.Types.ObjectId().toString(), teamId: new mongoose.Types.ObjectId().toString(), type: 'run', minutes: 30 });
     expect(missingReferences.status).toBeGreaterThanOrEqual(400);
     expect(missingReferences.status).toBeLessThan(500);
+    for (const missingReference of [
+      { ...validInput, userId: new mongoose.Types.ObjectId().toString() },
+      { ...validInput, teamId: new mongoose.Types.ObjectId().toString() },
+    ]) {
+      const response = await request(app).post('/api/activities').send(missingReference);
+      expect(response.status).toBe(404);
+    }
     for (const malformed of [{ userId: 'not-an-id', teamId: team._id.toString() }, { userId: user._id.toString(), teamId: 'not-an-id' }]) {
       const response = await request(app).post('/api/activities').send({ ...malformed, type: 'run', minutes: 30 });
       expect(response.status).toBeGreaterThanOrEqual(400);
       expect(response.status).toBeLessThan(500);
     }
     expect(await Activity.countDocuments()).toBe(0);
-    const created = await request(app).post('/api/activities').send({ userId: user._id.toString(), teamId: team._id.toString(), type: 'run', minutes: 30 });
+    const created = await request(app).post('/api/activities').send({ ...validInput, points: 999, occurredAt: 'invalid date' });
     expect(created.status).toBe(201);
     const listed = await request(app).get('/api/activities');
     expect(listed.body.activities).toHaveLength(1);
     for (const activity of [created.body.activity, listed.body.activities[0]]) {
       expect(activity).toMatchObject({ user: user._id.toString(), team: team._id.toString(), type: 'run', minutes: 30 });
-      expect(activity.points).toBeGreaterThan(0);
+      expect(activity.points).toBe(30);
       expect(Number.isNaN(Date.parse(activity.occurredAt))).toBe(false);
     }
   });
