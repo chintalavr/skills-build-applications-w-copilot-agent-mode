@@ -35,8 +35,8 @@ These decisions are the implementation plan, not a claim that the starter code i
 - Data tier decision: Add required-field validation to the existing Mongoose schemas: user name, email, and fitness goal; team name and mascot; activity user, team, type, minutes, points, and occurrence date; workout focus, minutes, and difficulty. Preserve ObjectId references and the default empty team members array. Retain the existing non-destructive, idempotent seed process and its membership-repair behavior. Keep MongoDB on port `27017`, the API on `8000`, and Vite on `5173`.
 - Activity tracking approach: Validate the request body, non-empty activity type, positive finite minutes, and both ObjectId formats before querying. Require an existing user and team, returning a deliberate 4xx without inserting anything when validation fails. Persist the submitted references, type, and minutes, compute one point per minute to match the seed fixtures, and set `occurredAt` on the server. Return the created record with `201` and list persisted records through the existing GET endpoint.
 - Team management approach: Validate a non-empty name and mascot and an optional array of member IDs, defaulting members to an empty array. Validate supplied member IDs and referenced users before persistence. Preserve the submitted name, mascot, and members in creation and listing responses; return `400` for a missing name.
-- Leaderboard approach: Aggregate persisted activity points by team, resolve team names, sort by descending total points, and assign sequential 1-based ranks. Use team name as a deterministic secondary sort for equal totals. Return entries with `teamName`, `totalPoints`, and `rank`, keeping aggregation out of presentation components.
-- Workout suggestions approach: Look up the user by the route's email and return `404` if no user matches. Use that user's fitness goal and recent activities to prioritize matching workout focus, mapping running and cycling to endurance and strength activities to strength. Include a human-readable `reason` explaining the goal or activity match on each suggestion; never return an arbitrary workout independent of the user.
+- Leaderboard approach: Aggregate persisted activity points by team, including teams without activities at zero points, sort by descending total points, and assign sequential 1-based ranks. Use team name as a deterministic secondary sort for equal totals. Return entries with `teamName`, `totalPoints`, and `rank`, keeping aggregation out of presentation components.
+- Workout suggestions approach: Look up the user by the route's email and return `404` if no user matches. Prioritize workouts matching the user's fitness goal, followed by workouts matching their latest activity by occurrence date (and ID for equal dates). Map running and cycling to endurance and strength activities to strength. The latest activity is the recency signal, with no age cutoff, so fixed demo fixtures remain useful. Sort workouts within each priority by title and ID. Include a human-readable `reason` explaining the goal or activity match on each suggestion; return an empty list if neither focus has matching workouts, never an arbitrary workout independent of the user.
 
 ### Smallest safe implementation order
 
@@ -83,6 +83,26 @@ Implemented only activity creation in the existing service. Missing or invalid f
 - `npm run build --prefix octofit-tracker/backend`: passed.
 - Next: `npm run test:api --prefix octofit-tracker/backend -- -t "creates teams and exposes members"`: confirmed failing because team creation still returns `501` instead of `400` for a missing name. Team creation, leaderboard, workout suggestions, and React are unchanged.
 
+### API capability loop results (2026-10-19)
+
+The initial API run passed activities and failed the other three capabilities. Implemented the remaining services one at a time without changing route response envelopes, Mongoose models, seed fixtures, or React:
+
+| Capability | Change and review | Validation result |
+| --- | --- | --- |
+| Activities | Rechecked existing field/reference validation, computed points, server date, creation and listing. | Existing activity contract remained passing throughout. |
+| Teams | Validate name, mascot, member array and ID formats before writes; require referenced users, preserve submitted fields, and default omitted members to `[]`. Creating a team does not silently reassign users' existing team references. | Activities and teams selector: 2 passed, 2 skipped. Backend build passed. |
+| Leaderboard | Sum stored points rather than minutes; include zero-point teams; order descending with name-based tie ordering and sequential ranks. Verify exact response fields. | First three capability selector: 3 passed, 1 skipped. Backend build passed. |
+| Workouts | Confirmed three workout tests failed before implementation. Match the user by email, prioritize goal focus, then latest user-specific activity focus, and explain each suggestion. Cover unknown users, conflicting goals/activity, user isolation, no history, and no matching workouts. | Full backend suite: 11 passed (6 API, 5 data). Backend build passed. |
+
+Commands used for incremental checks:
+
+- `npm run test:api --prefix octofit-tracker/backend`
+- `npm run test:api --prefix octofit-tracker/backend -- -t "creates and lists valid activities|creates teams and exposes members"`
+- `npm run test:api --prefix octofit-tracker/backend -- -t "creates and lists valid activities|creates teams and exposes members|orders leaderboard entries"`
+- `npm run test:api --prefix octofit-tracker/backend -- -t "suggests workouts"`
+- Final regression: `npm test --prefix octofit-tracker/backend`
+- Type checking: `npm run build --prefix octofit-tracker/backend`
+
 ### Implementation validation commands
 
 Use the targeted commands below during implementation. The separate data/API selectors and both builds were not run for this baseline; the combined backend command above exercised both contract files.
@@ -90,7 +110,7 @@ Use the targeted commands below during implementation. The separate data/API sel
 - Data-tier command: `npm run test:data --prefix octofit-tracker/backend`
   - Require all five tests to pass: required-field validation, member-array defaults and ID casting, and repeatable seeding that preserves unrelated records and repairs membership.
 - API command: `npm run test:api --prefix octofit-tracker/backend`
-  - Require all four tests to pass: invalid requests produce deliberate 4xx responses without writes, valid records are created and listed with the required fields, leaderboard totals and ranks match exactly, and suggestions match each user's goal/activity with a reason and reject unknown users.
+  - Require all six tests to pass: invalid requests produce deliberate 4xx responses without writes, valid records are created and listed with the required fields, leaderboard totals and ranks match exactly, and suggestions match each user's goal/activity with a reason and reject unknown users. Also verify suggestions with no history and with no matching workouts.
 - Frontend command: `npm test --prefix octofit-tracker/frontend`
   - Require all 15 tests to pass: API-backed content, the specific-user workout URL, and loading, empty, and accessible error states for every capability.
 - Backend build command: `npm run build --prefix octofit-tracker/backend`
