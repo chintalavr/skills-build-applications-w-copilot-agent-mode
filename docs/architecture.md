@@ -61,6 +61,20 @@ Total: **23 failed, 1 passed**. These are implementation failures, not missing-d
 
 Each test stops at its first failed assertion. Later assertions in failing API tests, including malformed/nonexistent references, successful creation, second-user recommendations, and unknown-user handling, must still be verified after the initial failures are fixed.
 
+### Data-tier implementation results (2026-10-19)
+
+Added required-field validators without changing field types, ObjectId references, optional user team assignment, or empty team membership defaults. Seed writes now enable Mongoose update validation. Existing fixture values and stable upsert keys remain unchanged: user email, team name, workout title, and activity user/team/type with fixed occurrence dates. No collections are cleared.
+
+Ran `npm run test:data --prefix octofit-tracker/backend` after each capability change:
+
+| Change | Result | Remaining failures |
+| --- | --- | --- |
+| User and team schemas and seed validation | 3 passed, 2 failed | Activity and workout required-field validation, not yet implemented. |
+| Activity schema and seed validation | 4 passed, 1 failed | Workout required-field validation, not yet implemented. |
+| Workout schema and seed validation | 5 passed | None. |
+
+The seed regression passed at every step. It runs the seed twice, checks stable collection counts, retains unrelated records, and verifies demo-user membership repair. `npm run build --prefix octofit-tracker/backend` also passed after all model changes. API and React files were not changed; their suites were not rerun during this data-only implementation.
+
 ### Implementation validation commands
 
 Use the targeted commands below during implementation. The separate data/API selectors and both builds were not run for this baseline; the combined backend command above exercised both contract files.

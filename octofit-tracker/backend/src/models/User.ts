@@ -1,10 +1,10 @@
 import { Schema, model } from 'mongoose';
 
 const userSchema = new Schema({
-  name: String,
-  email: String,
+  name: { type: String, required: true },
+  email: { type: String, required: true },
   team: { type: Schema.Types.ObjectId, ref: 'Team' },
-  fitnessGoal: String,
+  fitnessGoal: { type: String, required: true },
 });
 
 export const User = model('User', userSchema);

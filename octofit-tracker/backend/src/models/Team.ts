@@ -1,8 +1,8 @@
 import { Schema, model } from 'mongoose';
 
 const teamSchema = new Schema({
-  name: String,
-  mascot: String,
+  name: { type: String, required: true },
+  mascot: { type: String, required: true },
   members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 });
 
